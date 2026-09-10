@@ -6,8 +6,9 @@ trackpads and mice. Menu bar utility, macOS 26+, Apple silicon and Intel.
 Rules act on the *kind* of device, recognised from how it scrolls: a Magic Mouse
 scrolls with trackpad gestures, so the Trackpad rule governs it.
 
-**Status: not yet distributable.** It is signed with a local certificate, not
-Developer ID, and not notarized, so Gatekeeper rejects it on any other Mac. See
+**Status: not yet released.** Releases will be signed with the project's own
+certificate rather than notarized by Apple — see [Install](#install). What must
+pass before the first release is listed in
 [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-CHECKLIST.md).
 
 Built from a design canvas exploring four architectures — this implements
@@ -42,16 +43,49 @@ About.
 
 <img src="docs/images/about.png" width="820" alt="Scrollwise About pane, showing version, author and contact, repository and licence links, and a privacy summary: no network access, no analytics, scroll events read only to reverse them, no third-party code.">
 
+## Install
+
+Scrollwise is free and open source, and it is **not notarized by Apple** —
+notarization requires a paid Apple developer membership. Each release is signed
+with the project's own certificate instead, so macOS asks you to confirm it once
+for each download.
+
+1. Download `Scrollwise-<version>.dmg` from
+   [Releases](https://github.com/riteshr19/Scrollwise/releases).
+2. Optionally, check it against the SHA-256 published with the release:
+   `shasum -a 256 ~/Downloads/Scrollwise-<version>.dmg`
+3. Open the disk image and drag **Scrollwise** into **Applications**.
+4. Open Scrollwise. macOS says it cannot verify the app — click **Done**.
+5. Open **System Settings › Privacy & Security**, scroll down to the message
+   about Scrollwise, click **Open Anyway**, and confirm. From Terminal instead:
+   `xattr -dr com.apple.quarantine /Applications/Scrollwise.app`
+6. Grant **Accessibility** when Scrollwise asks (System Settings › Privacy &
+   Security › Accessibility). It notices within about a second; no restart.
+
+**Updating:** quit Scrollwise, replace it in Applications with the new version,
+and repeat steps 4–5 once. Accessibility stays granted, because every release is
+signed with the same certificate.
+
+**Rather not run a downloaded app?** Build it yourself, below. It needs only
+Apple's free Command Line Tools, and an app you build locally is not blocked by
+Gatekeeper at all.
+
 ## Build and run
 
 ```bash
+xcode-select --install             # once, if the Command Line Tools are missing
 bash Scripts/build-app.sh          # → build/Scrollwise.app, universal (arm64 + x86_64)
 open build/Scrollwise.app
-bash Scripts/make-dmg.sh           # → build/Scrollwise-<version>.dmg
+bash Scripts/make-dmg.sh           # → build/Scrollwise-<version>.dmg and .sha256
 ```
 
 Launch it with `open`, not by running the binary: a Terminal launch inherits
 Terminal's Accessibility grant and reports permission that the app does not have.
+
+Without a signing certificate of your own, the build is signed ad hoc, and macOS
+treats every rebuild as a different app: Accessibility has to be removed and
+granted again after each one. The comment at the signing step of
+`Scripts/build-app.sh` shows how to make a local certificate that avoids this.
 
 Then grant Accessibility access: **System Settings › Privacy & Security ›
 Accessibility**. The app opens its window on first launch to explain why, and
@@ -108,12 +142,16 @@ one file to maintain.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layers, event pipeline, threading, permissions, recovery
 - [docs/FRONTEND-AUDIT.md](docs/FRONTEND-AUDIT.md) — what the canvas contained, the glass finding, control mapping
 - [docs/TEST-PLAN.md](docs/TEST-PLAN.md) — automated coverage and the manual matrix
-- [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-CHECKLIST.md) — signing, notarization, known limitations
+- [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-CHECKLIST.md) — release gate, release identity, known limitations
 
 ## Notes
 
 - **Not sandboxed.** A sandboxed process cannot hold the Accessibility right an
-  event tap needs. Distribution is Developer ID, not the App Store.
+  event tap needs, so Scrollwise cannot be in the App Store. It is distributed as
+  a self-signed disk image on GitHub.
+- **Not notarized.** Notarization needs a paid Apple developer membership. The
+  cost to you is one confirmation per download (see [Install](#install)); the
+  source, the build script and a checksum for every release are here to check.
 - **No third-party dependencies.** AppKit, SwiftUI, CoreGraphics, IOKit,
   ServiceManagement, Carbon (for the global hot key), OSLog.
 - **No private API.**

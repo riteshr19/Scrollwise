@@ -161,6 +161,13 @@ chevrons — never for prose or a status word the user has to read.
   device identifier to a `CGEvent` scroll event. The Devices pane says so rather
   than shipping per-device switches that secretly move together.
 
+- **Releases are self-signed with "Scrollwise Local Signing" and not notarized.**
+  The project does not pay for the Apple Developer Program. That certificate is
+  the release identity: users' Accessibility grants are tied to its root hash, so
+  never sign a release ad hoc or with another certificate — `make-dmg.sh`
+  refuses to. Replacing it is a breaking release (every user re-grants once).
+  Details, fingerprint and backup steps: `docs/PRODUCTION-CHECKLIST.md`.
+
 ## Verifying UI work
 
 Claims about appearance need measurement, not assertion.

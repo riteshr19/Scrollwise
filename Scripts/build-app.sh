@@ -65,8 +65,17 @@ echo "==> Signing"
 #
 # Signing with a certificate instead yields `identifier "..." and certificate
 # root = H"..."`, which is stable across rebuilds, so the grant survives. The
-# certificate is self-signed and used only on this machine; it does not need to
-# be trusted in Keychain Access for codesign to accept it. Create one with:
+# certificate is self-signed; it does not need to be trusted in Keychain Access
+# for codesign to accept it.
+#
+# "Scrollwise Local Signing" is also the RELEASE identity: every published
+# release is signed with it, which is what keeps users' Accessibility grants
+# working across updates. Never replace it casually, and keep its private key
+# backed up — see "Release identity" in docs/PRODUCTION-CHECKLIST.md.
+# Scripts/make-dmg.sh refuses to package a build signed any other way.
+#
+# Someone building from source on their own machine can create their own local
+# identity with:
 #
 #   openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 \
 #       -nodes -subj "/CN=$SIGN_IDENTITY/O=Local Development" \
@@ -80,8 +89,7 @@ echo "==> Signing"
 #       -P temp -T /usr/bin/codesign -A
 #
 # (macOS cannot read OpenSSL 3's default PKCS#12 encryption, hence the explicit
-# legacy algorithms.) For distribution this must become a Developer ID signature
-# followed by notarization — see docs/PRODUCTION-CHECKLIST.md.
+# legacy algorithms.)
 SIGN_IDENTITY="${SIGN_IDENTITY:-Scrollwise Local Signing}"
 
 if security find-certificate -c "$SIGN_IDENTITY" >/dev/null 2>&1; then

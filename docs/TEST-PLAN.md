@@ -166,7 +166,13 @@ callback is never consulted for any of them.
 - [ ] **MANUAL REQUIRED** Revoke login item in System Settings → the switch
       corrects itself when the popover or settings window next appears.
 - [ ] **MANUAL REQUIRED** Connect/disconnect a Bluetooth mouse → list updates.
-- [ ] **MANUAL REQUIRED** Clean machine, never granted anything → full first run.
+- [ ] **MANUAL REQUIRED** Clean machine, never granted anything → download the
+      DMG in Safari, `shasum -a 256 -c`, drag to Applications, Gatekeeper
+      blocks it, Open Anyway in Privacy & Security, grant Accessibility, scroll.
+- [ ] **MANUAL REQUIRED** Update on that machine → install a newer build over it,
+      Open Anyway once more, and confirm Accessibility is **still granted** with
+      no re-grant. This is the test that proves self-signed distribution works
+      off the build machine.
 
 ## Appearance and accessibility
 
