@@ -26,8 +26,9 @@ a broken checkout. `ScrollwiseVerify` is a framework-free mirror asserting the
 same things and is the one to run. `Tests/` holds the swift-testing version for
 machines that do have Xcode; **keep the two in sync**, because on most machines
 only one of them is ever executed. CI (`.github/workflows/ci.yml`, macOS 26 with
-Xcode) runs both on every push, so a swift-testing failure shows up there even
-when it cannot be reproduced locally.
+Xcode) runs both on every pull request and every push to `main`, so a
+swift-testing failure shows up there even when it cannot be reproduced locally.
+A push to a branch with no pull request runs nothing — open one, even a draft.
 
 **`ScrollwiseTapCheck` needs a trusted terminal and no running Scrollwise.** It
 creates taps and posts scroll events, each stamped and consumed at the tail of

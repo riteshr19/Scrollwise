@@ -107,7 +107,8 @@ swift test                                # the swift-testing suite; needs Xcode
 ```
 
 CI (`.github/workflows/ci.yml`) runs the build, `ScrollwiseVerify`, `swift test`
-and the universal bundle build on macOS 26 with Xcode for every push.
+and the universal bundle build on macOS 26 with Xcode for every pull request and
+every push to `main`.
 
 `ScrollwiseTapCheck` posts scroll events and consumes them before any app sees
 them, and refuses to run while Scrollwise itself is running. What each suite
