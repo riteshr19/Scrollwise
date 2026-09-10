@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Deliberately minimal.
+
+	  App Sandbox is NOT requested. A CGEventTap that modifies events is
+	  incompatible with the sandbox: a sandboxed process cannot obtain the
+	  Accessibility right the tap requires. This is why Scrollwise and
+	  every comparable input utility ship unsandboxed and are distributed
+	  outside the Mac App Store, notarized with Developer ID.
+
+	  No other entitlement is requested. In particular the app asks for no
+	  network access, no file access beyond the app the user explicitly picks
+	  in the Apps pane, no camera/microphone, and no Input Monitoring — device
+	  names are read from IOKit properties without opening the HID devices.
+	-->
+	<key>com.apple.security.automation.apple-events</key>
+	<false/>
+</dict>
+</plist>
