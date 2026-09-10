@@ -74,6 +74,14 @@ Tests/                          swift-testing suite
 docs/                           architecture, audit, test plan, checklist
 ```
 
+## Contributing
+
+`AGENTS.md` holds the working notes for this repository — commands, the module
+boundary, the invariants, and the traps that have already cost time (TCC and code
+signing, HID device classification, `SMAppService` status). Coding agents read it
+automatically; it is worth a human read too. `CLAUDE.md` imports it so there is
+one file to maintain.
+
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layers, event pipeline, threading, permissions, recovery
