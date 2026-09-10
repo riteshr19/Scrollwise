@@ -290,7 +290,7 @@ struct MenuBarView: View {
                 Text("⌥⌘R unavailable")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                    .help("macOS did not register ⌥⌘R for Scrollwise, so it does not toggle scrolling. Another app may be using it.")
+                    .help("macOS did not register ⌥⌘R for Scrollwise, so the shortcut does not turn reversing on or off. Another app may be using it.")
             }
 
             Spacer(minLength: 8)
