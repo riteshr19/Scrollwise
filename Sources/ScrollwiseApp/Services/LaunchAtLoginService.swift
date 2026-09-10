@@ -60,6 +60,12 @@ enum LaunchAtLoginService {
         }
     }
 
+    /// Opens System Settings › General › Login Items, where a registration
+    /// waiting for approval is confirmed.
+    static func openSystemSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
     /// Human-readable form of what `SMAppService` reports, so a refusal can be
     /// diagnosed from the log instead of guessed at.
     static var statusDescription: String {

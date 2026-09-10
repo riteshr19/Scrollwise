@@ -4,14 +4,19 @@ import Foundation
 ///
 /// Why this and not IOHID: `CGEvent` scroll events reaching an event tap carry no
 /// public device identifier, so the originating device cannot be looked up. What
-/// they *do* carry is enough to separate the classes reliably:
+/// they *do* carry is enough to separate the classes:
 ///
-/// - A trackpad (and Magic Mouse's touch surface) drives a **continuous**,
-///   phase-bearing gesture: `isContinuous` is set and a phase is present.
-/// - Inertial scrolling after the fingers lift keeps `isContinuous` but reports a
-///   **momentum** phase instead. It is still the trackpad.
-/// - A conventional wheel emits **discrete**, phase-less clicks.
-/// - Tablet pucks announce themselves through the NSEvent subtype.
+/// - A trackpad drives a **continuous**, phase-bearing gesture. So does the touch
+///   surface of a Magic Mouse, which is why a Magic Mouse follows the Trackpad
+///   rule — the event gives no way to tell the two apart.
+/// - Inertial scrolling after the fingers lift reports a **momentum** phase
+///   instead. It is still the same touch surface.
+/// - A conventional wheel emits **discrete**, phase-less clicks. A high-resolution
+///   wheel is continuous but still phase-less, and is still a mouse.
+/// - A tablet pointer marks its events with a tablet mouse subtype.
+///
+/// Anything that matches none of these falls back to the mouse rule, the safe
+/// default: a device that reports no phase behaves like a wheel.
 ///
 /// This is a pure function so every branch is unit-testable.
 public enum DeviceClassifier {
@@ -28,14 +33,5 @@ public enum DeviceClassifier {
 
         // Discrete, phase-less clicks — a conventional wheel.
         return .mouse
-    }
-
-    /// Where the event sits in its gesture, which the momentum latch needs.
-    public static func phase(_ traits: ScrollEventTraits, isGestureStart: Bool, isGestureEnd: Bool) -> GesturePhase {
-        if traits.hasMomentumPhase { return .momentum }
-        guard traits.hasPhase else { return .discrete }
-        if isGestureStart { return .began }
-        if isGestureEnd { return .ended }
-        return .changed
     }
 }

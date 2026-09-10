@@ -24,11 +24,16 @@ struct ScrollwiseApp: App {
             Image(systemName: delegate.state.isActive
                   ? "arrow.up.arrow.down.circle.fill"
                   : "arrow.up.arrow.down.circle")
-                .accessibilityLabel(delegate.state.isActive
-                                    ? "Scrollwise, reversing"
-                                    : "Scrollwise, not reversing")
+                .accessibilityLabel(menuBarLabel)
         }
         .menuBarExtraStyle(.window)
+    }
+
+    /// Spoken by VoiceOver for the menu bar icon; held to the same standard as
+    /// the popover's headline.
+    private var menuBarLabel: String {
+        if delegate.state.isReversingSomething { return "Scrollwise, reversing" }
+        return delegate.state.isActive ? "Scrollwise, on, nothing to reverse" : "Scrollwise, not reversing"
     }
 }
 
@@ -36,7 +41,6 @@ struct ScrollwiseApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let state = AppState()
-    private let shortcuts = GlobalShortcutService()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A version number is not sensitive, and os_log redacts interpolations by
@@ -44,14 +48,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // starting", which is useless for telling which build is running.
         Log.lifecycle.info("Scrollwise \(AppInfo.version, privacy: .public) (build \(AppInfo.build, privacy: .public)) starting")
 
+        // Before anything installs a tap: a second copy would flip every event
+        // back again. See `SingleInstanceLock`.
+        switch SingleInstanceLock.acquire() {
+        case .acquired:
+            break
+        case .heldElsewhere:
+            Log.lifecycle.notice("Scrollwise is already running; this copy is exiting so only one event tap exists")
+            NSApp.terminate(nil)
+            return
+        case .unavailable(let reason):
+            Log.lifecycle.error("Single-instance lock unavailable (\(reason, privacy: .public)); continuing without it")
+        }
+
         state.start()
         SettingsWindowPresenter.shared.configure(state: state)
 
         Log.login.info("Login item status: \(LaunchAtLoginService.statusDescription, privacy: .public)")
-
-        shortcuts.register { [weak state] in
-            state?.toggleEnabled()
-        }
 
         // First run with no permission: show the window so the request is
         // explained, rather than firing a bare system prompt out of nowhere.
@@ -61,7 +74,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        shortcuts.unregister()
         state.shutDown()
     }
 

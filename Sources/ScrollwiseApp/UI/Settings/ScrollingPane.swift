@@ -51,7 +51,11 @@ struct ScrollingPane: View {
     }
 
     private var inactiveReason: String {
-        if !state.accessibility.allowsEngine { return "Waiting for Accessibility access" }
+        switch state.accessibility {
+        case .granted: break
+        case .denied: return "Waiting for Accessibility access"
+        case .grantedButTapFailed: return "macOS is refusing the connection"
+        }
         if !state.settings.isEnabled { return "Switched off" }
         if !state.isEngineRunning { return "Reconnecting to the event stream…" }
         return "No device is set to reverse"
@@ -64,8 +68,11 @@ struct ScrollingPane: View {
             SectionCaption(text: "Axes")
             SettingsCard {
                 axisRow(
+                    // These switches set every kind of device at once, so
+                    // switching one off and on again can reverse a device that
+                    // was natural before. Say so rather than surprise anyone.
                     title: "Vertical",
-                    subtitle: nil,
+                    subtitle: "Sets every kind of device at once — fine-tune each in Devices",
                     isOn: axisBinding(vertical: true)
                 )
                 RowDivider()

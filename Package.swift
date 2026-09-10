@@ -11,9 +11,16 @@ let package = Package(
             name: "ScrollwiseCore",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        // The event tap, its thread, and the engine that owns it. A library rather
+        // than part of the app so ScrollwiseTapCheck can drive the real tap.
+        .target(
+            name: "ScrollwiseEngine",
+            dependencies: ["ScrollwiseCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
         .executableTarget(
             name: "ScrollwiseApp",
-            dependencies: ["ScrollwiseCore"],
+            dependencies: ["ScrollwiseCore", "ScrollwiseEngine"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // Runs the same assertions as the test suite without swift-testing, so
@@ -21,6 +28,15 @@ let package = Package(
         .executableTarget(
             name: "ScrollwiseVerify",
             dependencies: ["ScrollwiseCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        // Live checks against the real event tap: lifecycle and duplicate-tap
+        // defence, end-to-end direction, the gesture latch, recovery from a
+        // timeout, and callback latency. Needs Accessibility, so it is run by
+        // hand rather than in CI. Never part of the shipped app.
+        .executableTarget(
+            name: "ScrollwiseTapCheck",
+            dependencies: ["ScrollwiseCore", "ScrollwiseEngine"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

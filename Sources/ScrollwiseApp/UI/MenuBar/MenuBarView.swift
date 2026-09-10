@@ -35,7 +35,7 @@ struct MenuBarView: View {
             }
         }
         .frame(width: Metrics.popoverWidth)
-        .onAppear { state.refreshDevices() }
+        .onAppear { state.refreshSystemState() }
     }
 
     // MARK: - Header
@@ -46,7 +46,7 @@ struct MenuBarView: View {
             SymbolTile(systemName: "arrow.up.arrow.down", size: 36)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(state.isActive ? "Reversing" : "Not reversing")
+                Text(headline)
                     .font(.headline)
                 Text(statusDetail)
                     .font(.callout)
@@ -68,8 +68,28 @@ struct MenuBarView: View {
         .padding(.bottom, 12)
     }
 
+    /// "Reversing" only when something connected is actually being reversed;
+    /// "On" when the engine is running with nothing to act on.
+    private var headline: String {
+        if state.isReversingSomething { return "Reversing" }
+        return state.isActive ? "On" : "Not reversing"
+    }
+
     private var statusDetail: String {
-        guard state.accessibility.allowsEngine else { return "Needs Accessibility access" }
+        switch state.accessibility {
+        case .granted: break
+        case .denied: return "Needs Accessibility access"
+        case .grantedButTapFailed: return "Accessibility access is not working"
+        }
+        guard state.isEngineRunning else { return "Connecting to the scroll event stream…" }
+        guard state.settings.isEnabled else { return "Switched off" }
+        if !state.isReversingSomething {
+            if let rule = state.frontmostAppRule, rule.isEnabled, rule.action != .forceReverse,
+               state.activeAttachedDeviceCount > 0 {
+                return "Left alone in \(rule.displayName)"
+            }
+            return "Nothing connected is set to reverse"
+        }
         let devices = state.activeAttachedDeviceCount
         let rules = state.enabledAppRuleCount
         let devicePart = switch devices {
@@ -240,7 +260,9 @@ struct MenuBarView: View {
 
     private var permissionPrompt: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Scrollwise needs Accessibility access before it can change scrolling.")
+            Text(state.accessibility == .grantedButTapFailed
+                 ? "macOS lists Scrollwise as allowed but refuses its connection. Remove it from the Accessibility list and add it again."
+                 : "Scrollwise needs Accessibility access before it can change scrolling.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -257,8 +279,17 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            Text("Toggle").font(.callout).foregroundStyle(.secondary)
-            KeyCapGroup(keys: ["⌥", "⌘", "R"])
+            // Only advertise keys that work. When another app owns the
+            // combination, showing them would invite a press that does nothing.
+            if state.isShortcutRegistered {
+                Text("Toggle").font(.callout).foregroundStyle(.secondary)
+                KeyCapGroup(keys: ["⌥", "⌘", "R"])
+            } else {
+                Text("⌥⌘R in use elsewhere")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .help("Another app already uses ⌥⌘R, so it does not toggle Scrollwise")
+            }
 
             Spacer(minLength: 8)
 

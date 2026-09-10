@@ -2,29 +2,13 @@ import AppKit
 import ApplicationServices
 import ScrollwiseCore
 
-/// Truthful Accessibility permission state.
-///
-/// The UI must never claim reversal is active when the tap cannot run, so this
-/// is the only place permission is decided and every surface reads it from here.
-enum AccessibilityStatus: Equatable, Sendable {
-    /// Trusted, and a tap can be created.
-    case granted
-    /// Not trusted. The engine cannot run.
-    case denied
-    /// Trusted according to the API, but the tap still would not attach. This
-    /// really happens — most often after an app is replaced on disk and TCC's
-    /// record no longer matches the binary.
-    case grantedButTapFailed
-
-    var allowsEngine: Bool { self == .granted }
-}
-
 /// Watches Accessibility trust and reports changes.
 ///
 /// macOS posts no notification when a TCC entry is toggled, so polling is the
 /// only supported way to notice. One second is frequent enough to feel immediate
 /// when the user comes back from System Settings, and `AXIsProcessTrusted` is a
-/// cheap local check.
+/// cheap local check. What each observation *means* is decided by
+/// `AccessibilityStatus` in Core, where the transitions are tested.
 @MainActor
 final class AccessibilityService {
 
@@ -37,7 +21,7 @@ final class AccessibilityService {
     /// The System Settings pane that hosts the Accessibility list.
     private static let settingsURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-    )!
+    )
 
     func start(onChange: @escaping (AccessibilityStatus) -> Void) {
         self.onChange = onChange
@@ -60,23 +44,31 @@ final class AccessibilityService {
     /// Reads current trust without prompting.
     @discardableResult
     func refresh() -> AccessibilityStatus {
-        let trusted = AXIsProcessTrusted()
-        let newStatus: AccessibilityStatus = trusted ? .granted : .denied
-        guard newStatus != status else { return status }
-        status = newStatus
-        Log.permission.info("Accessibility status changed to \(String(describing: newStatus), privacy: .public)")
-        onChange?(newStatus)
-        return newStatus
+        transition(to: status.polled(isTrusted: AXIsProcessTrusted()))
     }
 
     /// Records that a tap failed despite the API reporting trust, so the UI can
     /// say something more useful than "granted" while nothing works.
     func noteTapCreationFailed() {
-        guard AXIsProcessTrusted() else { return }
-        guard status != .grantedButTapFailed else { return }
-        status = .grantedButTapFailed
-        Log.permission.error("Trusted by AXIsProcessTrusted but the tap would not attach")
-        onChange?(status)
+        transition(to: status.afterTapFailure(isTrusted: AXIsProcessTrusted()))
+    }
+
+    /// Records that a tap attached, which clears a previous failure.
+    func noteTapInstalled() {
+        transition(to: status.afterTapInstalled())
+    }
+
+    @discardableResult
+    private func transition(to newStatus: AccessibilityStatus) -> AccessibilityStatus {
+        guard newStatus != status else { return status }
+        status = newStatus
+        if newStatus == .grantedButTapFailed {
+            Log.permission.error("Trusted by AXIsProcessTrusted but the tap would not attach")
+        } else {
+            Log.permission.info("Accessibility status changed to \(String(describing: newStatus), privacy: .public)")
+        }
+        onChange?(newStatus)
+        return newStatus
     }
 
     /// Shows the system's own permission prompt. Only ever called from an
@@ -89,6 +81,7 @@ final class AccessibilityService {
     }
 
     func openSystemSettings() {
-        NSWorkspace.shared.open(Self.settingsURL)
+        guard let url = Self.settingsURL else { return }
+        NSWorkspace.shared.open(url)
     }
 }

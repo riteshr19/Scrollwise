@@ -5,25 +5,38 @@
 # with the Command Line Tools toolchain alone. The layout is identical to what
 # Xcode produces, so importing it into an Xcode project later changes nothing
 # about the result.
+#
+#   Scripts/build-app.sh                # universal (arm64 + x86_64), release
+#   ARCHS=arm64 Scripts/build-app.sh    # one slice, for a quicker local build
+#   SIGN_IDENTITY="Developer ID Application: …" Scripts/build-app.sh
 set -euo pipefail
 
 CONFIG="${1:-release}"
+ARCHS="${ARCHS:-arm64 x86_64}"
+MIN_MACOS="26.0"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/build/Scrollwise.app"
 
-echo "==> Building ($CONFIG, universal)"
 cd "$ROOT"
-swift build -c "$CONFIG" --product ScrollwiseApp \
-    --arch arm64 --arch x86_64 2>/dev/null \
-  || { echo "    universal build unavailable, falling back to host arch"; \
-       swift build -c "$CONFIG" --product ScrollwiseApp; }
 
-BIN="$(swift build -c "$CONFIG" --product ScrollwiseApp --show-bin-path)"
+# One slice per architecture, then lipo. `swift build --arch a --arch b` would
+# do this in one step but needs XCBuild, which ships only with Xcode; building
+# each triple separately works with Command Line Tools too. Each slice gets its
+# own scratch directory so the two never share intermediate products.
+echo "==> Building ($CONFIG: $ARCHS)"
+SLICES=()
+for arch in $ARCHS; do
+    scratch="$ROOT/.build/arch-$arch"
+    triple="$arch-apple-macosx$MIN_MACOS"
+    swift build -c "$CONFIG" --product ScrollwiseApp --triple "$triple" --scratch-path "$scratch"
+    SLICES+=("$(swift build -c "$CONFIG" --product ScrollwiseApp --triple "$triple" \
+        --scratch-path "$scratch" --show-bin-path)/ScrollwiseApp")
+done
 
 echo "==> Assembling bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN/ScrollwiseApp" "$APP/Contents/MacOS/ScrollwiseApp"
+lipo -create "${SLICES[@]}" -output "$APP/Contents/MacOS/ScrollwiseApp"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
 # The icon is committed rather than generated here: it changes only when someone
@@ -36,6 +49,11 @@ else
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
+# Nothing but the executable, Info.plist, PkgInfo and the icon belongs in the
+# bundle; extended attributes from the build tree would break the seal.
+# (macOS's xattr has no recursive flag, hence find.)
+find "$APP" -exec xattr -c {} +
+
 echo "==> Signing"
 # Prefer a stable local identity over an ad-hoc signature.
 #
@@ -47,8 +65,17 @@ echo "==> Signing"
 #
 # Signing with a certificate instead yields `identifier "..." and certificate
 # root = H"..."`, which is stable across rebuilds, so the grant survives. The
-# certificate is self-signed and used only on this machine; it does not need to
-# be trusted in Keychain Access for codesign to accept it. Create one with:
+# certificate is self-signed; it does not need to be trusted in Keychain Access
+# for codesign to accept it.
+#
+# "Scrollwise Local Signing" is also the RELEASE identity: every published
+# release is signed with it, which is what keeps users' Accessibility grants
+# working across updates. Never replace it casually, and keep its private key
+# backed up — see "Release identity" in docs/PRODUCTION-CHECKLIST.md.
+# Scripts/make-dmg.sh refuses to package a build signed any other way.
+#
+# Someone building from source on their own machine can create their own local
+# identity with:
 #
 #   openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 \
 #       -nodes -subj "/CN=$SIGN_IDENTITY/O=Local Development" \
@@ -62,25 +89,41 @@ echo "==> Signing"
 #       -P temp -T /usr/bin/codesign -A
 #
 # (macOS cannot read OpenSSL 3's default PKCS#12 encryption, hence the explicit
-# legacy algorithms.) For distribution this must become a Developer ID signature
-# followed by notarization — see docs/PRODUCTION-CHECKLIST.md.
+# legacy algorithms.)
 SIGN_IDENTITY="${SIGN_IDENTITY:-Scrollwise Local Signing}"
 
 if security find-certificate -c "$SIGN_IDENTITY" >/dev/null 2>&1; then
-    echo "    identity: $SIGN_IDENTITY (stable — Accessibility grant survives rebuilds)"
+    echo "    identity: $SIGN_IDENTITY"
 else
     SIGN_IDENTITY="-"
     echo "    identity: ad-hoc — macOS will drop the Accessibility grant on every rebuild"
 fi
 
-codesign --force --deep \
+# Notarization requires a secure timestamp; a local or ad-hoc signature cannot
+# obtain one, and asking would fail the build for no benefit.
+case "$SIGN_IDENTITY" in
+    "Developer ID Application:"*) TIMESTAMP="--timestamp" ;;
+    *) TIMESTAMP="--timestamp=none" ;;
+esac
+
+# No --deep: the bundle holds no nested code, and --deep is deprecated for
+# signing because it applies one set of options to everything it finds.
+codesign --force \
     --sign "$SIGN_IDENTITY" \
     --entitlements "$ROOT/Resources/Scrollwise.entitlements" \
     --options runtime \
+    "$TIMESTAMP" \
     "$APP" 2>&1 | sed 's/^/    /'
 
 echo "==> Verifying"
-codesign --verify --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
-echo "    architectures: $(lipo -archs "$APP/Contents/MacOS/ScrollwiseApp")"
+codesign --verify --strict --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
+BUILT_ARCHS="$(lipo -archs "$APP/Contents/MacOS/ScrollwiseApp")"
+echo "    architectures: $BUILT_ARCHS"
+for arch in $ARCHS; do
+    case " $BUILT_ARCHS " in
+        *" $arch "*) ;;
+        *) echo "    error: $arch slice missing"; exit 1 ;;
+    esac
+done
 echo
 echo "Built: $APP"

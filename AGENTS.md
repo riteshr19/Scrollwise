@@ -10,29 +10,47 @@ actually doing, and most of the rules below exist to keep it that way.
 ## Commands
 
 ```bash
-swift build -c release                  # build
-swift run -c release ScrollwiseVerify   # the test suite that actually runs here
-bash Scripts/build-app.sh               # assemble + sign Scrollwise.app into build/
+swift build -c release                        # build everything
+swift run -c release ScrollwiseVerify         # Core checks, no Xcode needed
+swift run -c release ScrollwiseTapCheck       # live tap checks; needs Accessibility
+swift run -c release -Xswiftc -DSCROLLWISE_INSTRUMENT ScrollwiseTapCheck  # + recovery, timing
+swift run -c release ScrollwiseTapCheck --running-app   # end to end against a running bundle
+bash Scripts/build-app.sh                     # universal, signed Scrollwise.app in build/
+bash Scripts/make-dmg.sh                      # build/Scrollwise-<version>.dmg
 swiftc -parse-as-library Scripts/make-icon.swift -o /tmp/make-icon && /tmp/make-icon
 ```
 
 **`swift test` does not work on a Command Line Tools machine.** It fails with
 `no such module 'Testing'`, because swift-testing ships with Xcode. This is not
 a broken checkout. `ScrollwiseVerify` is a framework-free mirror asserting the
-same things — 73 checks, and it is the one to run. `Tests/` holds the
-swift-testing version for machines that do have Xcode; **keep the two in sync**,
-because on most machines only one of them is ever executed.
+same things and is the one to run. `Tests/` holds the swift-testing version for
+machines that do have Xcode; **keep the two in sync**, because on most machines
+only one of them is ever executed. CI (`.github/workflows/ci.yml`, macOS 26 with
+Xcode) runs both on every pull request and every push to `main`, so a
+swift-testing failure shows up there even when it cannot be reproduced locally.
+A push to a branch with no pull request runs nothing — open one, even a draft.
+
+**`ScrollwiseTapCheck` needs a trusted terminal and no running Scrollwise.** It
+creates taps and posts scroll events, each stamped and consumed at the tail of
+the session so no app scrolls. It refuses to run while Scrollwise is running,
+because that tap would flip its events too. The instrumentation build stalls the
+tap on purpose three times; real scrolling pauses for about 2.5 s each time.
 
 ## Architecture
 
-Two modules, and the boundary between them is the reason the project is testable
-at all:
+Three modules, and the boundaries between them are the reason the project is
+testable at all:
 
 - **`ScrollwiseCore`** — every decision, no platform. It imports `Foundation` and
   `OSLog` and nothing else. `ScrollTransformer` (what to flip), `DeviceClassifier`
-  (what produced the event), `GestureLatch` (momentum), `HIDPointingDeviceClassifier`
-  (what a device is), `LoginItemState`, settings and persistence.
-- **`ScrollwiseApp`** — the adapter. AppKit, SwiftUI, CoreGraphics, IOKit, Carbon,
+  (what produced the event), `RawScrollFields` (what the tap's integers mean),
+  `GestureLatch` (momentum), `AccessibilityStatus` (permission transitions),
+  `HIDPointingDeviceClassifier` (what a device is), `LoginItemState`, settings
+  and persistence.
+- **`ScrollwiseEngine`** — the tap and its owner: `EventTapController`,
+  `ScrollEngine`, `SnapshotBox`, `CGEventScrollAccess`. A library so
+  `ScrollwiseTapCheck` can drive exactly the code the app ships.
+- **`ScrollwiseApp`** — the adapter. AppKit, SwiftUI, IOKit, Carbon,
   ServiceManagement. It reads the world, hands values to Core, and renders the
   answer.
 
@@ -62,6 +80,30 @@ extract the values in App and pass primitives across.
    Devices pane does this about per-device rules.
 
 ## Traps that have already cost time
+
+**Writing a scroll delta field recomputes the others.** Setting
+`scrollWheelEventDeltaAxis1` makes CoreGraphics rewrite the pixel and
+fixed-point fields from it. Read all three, then write all three — negating each
+field just after writing the previous one flips the recomputed values back, and
+apps reading `scrollingDeltaY` see the original direction. The live check
+(`ScrollwiseTapCheck`, section 3) compares all six fields and fails on this.
+
+**`tapDisabledByTimeout` cannot be relied on to arrive.** Measured on macOS
+26.5: a callback stalled past the timeout got its tap disabled, and no disabled
+notification ever reached the callback. The watchdog timer on the tap thread is
+what re-enables it. Do not remove it because the callback path "handles" this.
+
+**A synthetic scroll event cannot carry a tablet subtype.** The subtype set on a
+posted scroll event arrives at the tap as 0, so the Tablet rule is unreachable
+from any automated test. It needs a real tablet.
+
+**`RegisterEventHotKey` does not fail when another process holds the same
+combination.** Both registrations return `noErr`. The UI's "in use elsewhere"
+state covers genuine registration failures only; a cross-process conflict is
+not detectable through this API.
+
+**In zsh, `log` is a builtin.** `log stream …` fails with "too many arguments";
+call `/usr/bin/log`. And macOS's `xattr` has no `-r`; walk the tree with `find`.
 
 **Ad-hoc signing silently revokes Accessibility.** `codesign --sign -` produces a
 designated requirement of `cdhash H"..."` — a hash of one exact build — so every
@@ -121,6 +163,13 @@ chevrons — never for prose or a status word the user has to read.
 - **Rules act on device *class*, not individual device.** No public API attaches a
   device identifier to a `CGEvent` scroll event. The Devices pane says so rather
   than shipping per-device switches that secretly move together.
+
+- **Releases are self-signed with "Scrollwise Local Signing" and not notarized.**
+  The project does not pay for the Apple Developer Program. That certificate is
+  the release identity: users' Accessibility grants are tied to its root hash, so
+  never sign a release ad hoc or with another certificate — `make-dmg.sh`
+  refuses to. Replacing it is a breaking release (every user re-grants once).
+  Details, fingerprint and backup steps: `docs/PRODUCTION-CHECKLIST.md`.
 
 ## Verifying UI work
 

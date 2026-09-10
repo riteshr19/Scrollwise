@@ -51,9 +51,13 @@ public enum HIDPointingDeviceClassifier {
             usagePairs.contains(HIDUsage.Pair(page: page, usage: usage))
         }
 
+        // A pen collection exists only on pen digitizers, so it outranks the
+        // touch pad a tablet with a touch surface also publishes; a trackpad
+        // never has one. A bare digitizer collection is weaker evidence than a
+        // touch pad, so it ranks below it.
+        if has(HIDUsage.digitizerPage, HIDUsage.pen) { return .tablet }
         if has(HIDUsage.digitizerPage, HIDUsage.touchPad) { return .trackpad }
-        if has(HIDUsage.digitizerPage, HIDUsage.pen)
-            || has(HIDUsage.digitizerPage, HIDUsage.digitizer) { return .tablet }
+        if has(HIDUsage.digitizerPage, HIDUsage.digitizer) { return .tablet }
         if has(HIDUsage.genericDesktopPage, HIDUsage.mouse) { return .mouse }
 
         // Only for a device that publishes no usage pairs at all.
@@ -61,6 +65,28 @@ public enum HIDPointingDeviceClassifier {
             return primaryUsage == HIDUsage.touchPad ? .trackpad : .tablet
         }
         return .mouse
+    }
+
+    /// Vendor IDs Apple hardware reports: its USB vendor ID, and its Bluetooth
+    /// SIG company ID, which is what a Bluetooth Magic Mouse presents.
+    public static let appleVendorIDs: Set<Int> = [0x05AC, 0x004C]
+
+    /// Magic Mouse product IDs — original, Magic Mouse 2, and the USB‑C model —
+    /// as listed in the Linux kernel's `hid-ids.h`.
+    public static let magicMouseProductIDs: Set<Int> = [0x030D, 0x0269, 0x0323]
+
+    /// Whether a device is a Magic Mouse, whose *scrolling* the Trackpad rule
+    /// governs even though it is a mouse.
+    ///
+    /// Its top surface is a touch surface: the scroll events it produces carry
+    /// gesture and momentum phases exactly as a trackpad's do, and the
+    /// event-time classifier — the only thing that decides what is reversed —
+    /// puts them under the Trackpad rule. Listing it under Mouse would claim a
+    /// rule that never touches its scrolling.
+    public static func isMagicMouse(vendorID: Int?, productID: Int?, name: String) -> Bool {
+        if name.localizedCaseInsensitiveContains("magic mouse") { return true }
+        guard let vendorID, let productID else { return false }
+        return appleVendorIDs.contains(vendorID) && magicMouseProductIDs.contains(productID)
     }
 
     /// Apple's internal keyboard/trackpad reports transport "FIFO" on Apple

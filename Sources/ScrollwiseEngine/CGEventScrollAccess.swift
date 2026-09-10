@@ -10,52 +10,25 @@ import ScrollwiseCore
 /// third — so all three must be negated together or an app sees the axis
 /// disagree with itself. That is the cause of the jitter and half-reversed
 /// momentum that naive implementations show.
-enum CGEventScrollAccess {
+///
+/// This type only moves integers in and out of the event. What they mean —
+/// device class, gesture phase, when a gesture ends — is decided in Core by
+/// `RawScrollFields`, where it is tested.
+public enum CGEventScrollAccess {
 
-    // Axis 1 is vertical, axis 2 horizontal. Axis 3 is unused by every shipping
-    // pointing device and is deliberately left untouched.
+    // Axis 1 is vertical, axis 2 horizontal. Axis 3 and the accelerated-delta
+    // fields are deliberately left untouched: no shipping pointing device drives
+    // axis 3, and the accelerated fields are not read by AppKit's scroll deltas.
 
-    static func traits(of event: CGEvent) -> ScrollEventTraits {
-        ScrollEventTraits(
-            isContinuous: event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0,
-            hasPhase: event.getIntegerValueField(.scrollWheelEventScrollPhase) != 0,
-            hasMomentumPhase: event.getIntegerValueField(.scrollWheelEventMomentumPhase) != 0
+    /// The four integers classification and latching need. Four field reads,
+    /// no allocation.
+    public static func rawFields(of event: CGEvent) -> RawScrollFields {
+        RawScrollFields(
+            isContinuous: event.getIntegerValueField(.scrollWheelEventIsContinuous),
+            scrollPhase: event.getIntegerValueField(.scrollWheelEventScrollPhase),
+            momentumPhase: event.getIntegerValueField(.scrollWheelEventMomentumPhase),
+            mouseSubtype: event.getIntegerValueField(.mouseEventSubtype)
         )
-    }
-
-    /// Raw CoreGraphics phase constants. Declared here rather than imported
-    /// because CoreGraphics exposes them only to C.
-    private enum RawScrollPhase {
-        static let began: Int64 = 1
-        static let ended: Int64 = 4
-        static let cancelled: Int64 = 8
-    }
-
-    private enum RawMomentumPhase {
-        static let ended: Int64 = 3
-    }
-
-    static func phase(of event: CGEvent) -> GesturePhase {
-        let momentum = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
-        if momentum != 0 {
-            return .momentum
-        }
-        let scroll = event.getIntegerValueField(.scrollWheelEventScrollPhase)
-        switch scroll {
-        case 0: return .discrete
-        case RawScrollPhase.began: return .began
-        case RawScrollPhase.ended, RawScrollPhase.cancelled: return .ended
-        default: return .changed
-        }
-    }
-
-    /// True once inertia has finished, so the gesture latch can be released.
-    static func isGestureFinished(_ event: CGEvent) -> Bool {
-        let momentum = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
-        if momentum == RawMomentumPhase.ended { return true }
-        if momentum != 0 { return false }
-        let scroll = event.getIntegerValueField(.scrollWheelEventScrollPhase)
-        return scroll == RawScrollPhase.ended || scroll == RawScrollPhase.cancelled
     }
 
     /// Negates every representation of the requested axes in place on the event.
@@ -63,7 +36,7 @@ enum CGEventScrollAccess {
     /// Only the six scroll delta fields are touched. Modifier flags, timestamps,
     /// location, phase, source state and the tablet fields are left exactly as
     /// they arrived, so nothing but scrolling direction is affected.
-    static func apply(_ flip: AxisFlip, to event: CGEvent) {
+    public static func apply(_ flip: AxisFlip, to event: CGEvent) {
         if flip.vertical {
             negate(event, line: .scrollWheelEventDeltaAxis1,
                    point: .scrollWheelEventPointDeltaAxis1,
@@ -76,19 +49,34 @@ enum CGEventScrollAccess {
         }
     }
 
+    /// Reads all three representations *before* writing any of them.
+    ///
+    /// Writing the line field makes CoreGraphics recompute the pixel and
+    /// fixed-point fields from it. An earlier version read each field just
+    /// before negating it, so it read those recomputed values — already
+    /// negative, and rescaled — and flipped them back. Measured on the live tap:
+    /// `line 3 · point 30 · fixed 3.0` arrived as `line −3 · point +24 ·
+    /// fixed +3.0`, so every app reading precise deltas (`scrollingDeltaY`) saw
+    /// the original direction. The negation itself is `AxisDelta.negated` from
+    /// Core: tested, and unable to trap on `Int64.min`.
     private static func negate(
         _ event: CGEvent,
         line: CGEventField,
         point: CGEventField,
         fixed: CGEventField
     ) {
-        event.setIntegerValueField(line, value: -event.getIntegerValueField(line))
-        event.setIntegerValueField(point, value: -event.getIntegerValueField(point))
-        event.setDoubleValueField(fixed, value: -event.getDoubleValueField(fixed))
+        let flipped = AxisDelta(
+            line: event.getIntegerValueField(line),
+            point: event.getIntegerValueField(point),
+            fixedPoint: event.getDoubleValueField(fixed)
+        ).negated
+        event.setIntegerValueField(line, value: flipped.line)
+        event.setIntegerValueField(point, value: flipped.point)
+        event.setDoubleValueField(fixed, value: flipped.fixedPoint)
     }
 
     /// Used by diagnostics and tests to observe an event as a value type.
-    static func delta(of event: CGEvent) -> ScrollDelta {
+    public static func delta(of event: CGEvent) -> ScrollDelta {
         ScrollDelta(
             vertical: AxisDelta(
                 line: event.getIntegerValueField(.scrollWheelEventDeltaAxis1),

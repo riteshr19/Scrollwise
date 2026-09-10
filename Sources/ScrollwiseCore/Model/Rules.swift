@@ -95,3 +95,61 @@ public struct Profile: Codable, Equatable, Sendable, Identifiable {
         return copy
     }
 }
+
+// MARK: - Decoding
+//
+// Forgiving for the same reason as `ScrollSettings`: these are read back from
+// disk. Only the field that gives an element its identity is required; an
+// element without one is dropped by the enclosing `LossyArray`.
+
+extension DeviceRule {
+    enum CodingKeys: String, CodingKey {
+        case device, reverseVertical, reverseHorizontal, isEnabled
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            device: try container.decode(PointingDeviceType.self, forKey: .device),
+            reverseVertical: container.lenient(Bool.self, .reverseVertical) ?? false,
+            reverseHorizontal: container.lenient(Bool.self, .reverseHorizontal) ?? false,
+            isEnabled: container.lenient(Bool.self, .isEnabled) ?? true
+        )
+    }
+}
+
+extension AppRule {
+    enum CodingKeys: String, CodingKey {
+        case bundleIdentifier, displayName, action, isEnabled
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let bundleIdentifier = try container.decode(String.self, forKey: .bundleIdentifier)
+        self.init(
+            bundleIdentifier: bundleIdentifier,
+            displayName: container.lenient(String.self, .displayName) ?? bundleIdentifier,
+            // An action this build does not know — written by a newer one —
+            // becomes "leave alone", the one choice that can never make
+            // scrolling behave worse than macOS does on its own.
+            action: container.lenient(AppRuleAction.self, .action) ?? .passthrough,
+            isEnabled: container.lenient(Bool.self, .isEnabled) ?? true
+        )
+    }
+}
+
+extension Profile {
+    enum CodingKeys: String, CodingKey {
+        case id, name, deviceRules
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            name: container.lenient(String.self, .name) ?? "Profile",
+            deviceRules: container.lenient(LossyArray<DeviceRule>.self, .deviceRules)?.elements
+                ?? SettingsDefaults.deviceRules
+        )
+    }
+}

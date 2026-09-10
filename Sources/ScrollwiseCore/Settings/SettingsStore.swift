@@ -8,6 +8,11 @@ import Foundation
 public final class SettingsStore: @unchecked Sendable {
 
     public static let storageKey = "settings.v1"
+    /// Where a blob this build could not read is kept, so falling back to
+    /// defaults — whose next save overwrites `storageKey` — does not destroy it.
+    /// A store written by a newer version and then opened by an older one is
+    /// the realistic way to get here.
+    public static let unreadableBackupKey = "settings.v1.unreadable"
 
     // UserDefaults is documented as thread-safe; it simply predates Sendable.
     nonisolated(unsafe) private let defaults: UserDefaults
@@ -16,15 +21,18 @@ public final class SettingsStore: @unchecked Sendable {
         self.defaults = defaults
     }
 
+    /// Always returns settings the engine can act on: decoded leniently,
+    /// migrated, then normalized, or the shipped defaults if nothing is readable.
     public func load() -> ScrollSettings {
         guard let data = defaults.data(forKey: Self.storageKey) else {
             return SettingsDefaults.settings
         }
         do {
             let decoded = try JSONDecoder().decode(ScrollSettings.self, from: data)
-            return migrate(decoded)
+            return migrate(decoded).normalized()
         } catch {
-            Log.settings.error("Settings unreadable, falling back to defaults: \(error.localizedDescription, privacy: .public)")
+            defaults.set(data, forKey: Self.unreadableBackupKey)
+            Log.settings.error("Settings unreadable, falling back to defaults (original kept under \(Self.unreadableBackupKey, privacy: .public)): \(error.localizedDescription, privacy: .public)")
             return SettingsDefaults.settings
         }
     }
@@ -40,14 +48,17 @@ public final class SettingsStore: @unchecked Sendable {
         }
     }
 
-    /// Brings an older payload up to the current schema. Additive so far, so
-    /// decoding already supplies the new fields' defaults; the hook exists for
-    /// the first genuinely breaking change.
+    /// Brings a payload to the current schema.
+    ///
+    /// Every change so far has been additive, and the decoder supplies a default
+    /// for any field that is missing, so there is nothing to transform yet. The
+    /// first change that is not additive belongs here, keyed on `schemaVersion`.
+    /// A store from a *newer* schema is read for what this build understands.
     private func migrate(_ settings: ScrollSettings) -> ScrollSettings {
-        guard settings.schemaVersion < ScrollSettings.currentSchemaVersion else { return settings }
+        guard settings.schemaVersion != ScrollSettings.currentSchemaVersion else { return settings }
         var migrated = settings
         migrated.schemaVersion = ScrollSettings.currentSchemaVersion
-        Log.settings.info("Migrated settings from schema \(settings.schemaVersion) to \(ScrollSettings.currentSchemaVersion)")
+        Log.settings.info("Read settings written with schema \(settings.schemaVersion) as schema \(ScrollSettings.currentSchemaVersion)")
         return migrated
     }
 }
