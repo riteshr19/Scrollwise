@@ -48,6 +48,26 @@ that motion is smooth with no jitter, stutter or direction snap.
 | rapid direction change | | | | |
 | setting changed mid-flick | must **not** reverse in-flight inertia | n/a | n/a | same |
 
+## End-to-end event verification
+
+Direction correctness is checked against the live tap rather than reasoned about.
+A listen-only tap is placed at the **tail** of the session chain, so it observes
+events after Scrollwise's head-inserted tap has modified them; a synthetic scroll
+is posted at the HID level and the delivered delta read back.
+
+| posted | classified | rule | observed | |
+|---|---|---|---|---|
+| `+3`, discrete, no phase | mouse | reverse | **−3** | reversed |
+| `+3`, continuous + phase | trackpad | leave alone | **+3** | untouched |
+
+That single pair exercises the whole path: the tap is attached and modifying, the
+classifier separates the device classes from event traits alone, and the per-class
+rules are applied. It does **not** cover feel — smoothness, jitter and direction
+snap still need a hand on real hardware, which is what the matrix above is for.
+
+Reproduce with a tap created as
+`CGEvent.tapCreate(tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .listenOnly, …)`.
+
 ## Manual — untouched input
 
 Confirm none of these change while the engine is running: cursor movement, left
@@ -60,7 +80,9 @@ only, so the callback is never consulted for any of them.
 - [x] First launch with no permission → window explains, engine stays stopped, no
       control claims success *(verified: `Scroll engine stopped`, no tap installed,
       no system prompt, settings window opened itself, banner and footer both honest)*
-- [ ] Grant permission with app running → engine starts within ~1 s, no restart
+- [x] Grant permission with app running → engine starts, no restart *(verified:
+      the app was already running as pid 67554 when the grant was made and picked
+      it up on its own — same process, engine attached, no relaunch)*
 - [ ] Revoke permission with app running → engine stops, UI reports it.
       **Not verifiable with `tccutil reset`**: clearing the TCC entry leaves an
       already-running process trusted — the app polls `AXIsProcessTrusted()` every
