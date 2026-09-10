@@ -98,7 +98,7 @@ posted scroll event arrives at the tap as 0, so the Tablet rule is unreachable
 from any automated test. It needs a real tablet.
 
 **`RegisterEventHotKey` does not fail when another process holds the same
-combination.** Both registrations return `noErr`. The UI's "in use elsewhere"
+combination.** Both registrations return `noErr`. The UI's "unavailable"
 state covers genuine registration failures only; a cross-process conflict is
 not detectable through this API.
 

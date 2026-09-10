@@ -104,7 +104,8 @@ Terminal's Accessibility grant).
 - [x] **PASSED** ⌥⌘R while another process also registered it: both
       registrations return `noErr` and Scrollwise still toggles. A cross-process
       conflict is **not detectable** through `RegisterEventHotKey`; the UI's
-      "in use elsewhere" state covers genuine registration failures only.
+      "unavailable" state covers genuine registration failures only, and says
+      no more than that: registration failed, and another app *may* be the cause.
 - [x] **PASSED** Replaced application: the same bundle re-signed ad hoc, so its
       designated requirement no longer matches the certificate-based grant, then
       launched with `open`. `AXIsProcessTrusted` reports it untrusted, the engine

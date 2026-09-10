@@ -52,11 +52,17 @@ public final class EventTapInstrument: @unchecked Sendable {
         nanosleep(&request, nil)
     }
 
-    /// Callback durations in nanoseconds, oldest first once the buffer wraps.
+    /// Callback durations in nanoseconds, oldest first. Once more than
+    /// `capacity` have been recorded, these are the most recent `capacity`.
     /// Only meaningful after `EventTapController.stop()` has returned, when the
     /// tap thread that writes them has exited.
     public func durations() -> [UInt64] {
-        Array(UnsafeBufferPointer(start: samples, count: min(recorded, Self.capacity)))
+        let buffer = UnsafeBufferPointer(start: samples, count: Self.capacity)
+        guard recorded > Self.capacity else { return Array(buffer.prefix(recorded)) }
+        // The storage is a ring: after it wraps, the oldest sample is the one
+        // the next write would replace.
+        let oldest = recorded & (Self.capacity - 1)
+        return Array(buffer[oldest...]) + Array(buffer[..<oldest])
     }
 }
 #endif

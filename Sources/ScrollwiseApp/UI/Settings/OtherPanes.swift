@@ -85,7 +85,7 @@ struct ShortcutsPane: View {
                     title: "Toggle from anywhere",
                     subtitle: state.isShortcutRegistered
                         ? "Flips the master switch without opening the app"
-                        : "Unavailable — another app already uses this combination",
+                        : "Unavailable — macOS did not register this shortcut. Another app may be using it.",
                     systemImage: "command",
                     isDimmed: !state.isShortcutRegistered
                 ) {
