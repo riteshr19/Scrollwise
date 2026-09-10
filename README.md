@@ -1,5 +1,7 @@
 # Scrollwise
 
+[![CI](https://github.com/riteshr19/Scrollwise/actions/workflows/ci.yml/badge.svg)](https://github.com/riteshr19/Scrollwise/actions/workflows/ci.yml)
+
 Reverses the direction of scrolling on macOS, with independent settings for
 trackpads and mice. Menu bar utility, macOS 26+, Apple silicon and Intel.
 
@@ -103,6 +105,9 @@ swift run -c release -Xswiftc -DSCROLLWISE_INSTRUMENT ScrollwiseTapCheck   # 56,
 swift run -c release ScrollwiseTapCheck --running-app   # 6, end to end against the running app
 swift test                                # the swift-testing suite; needs Xcode for `Testing`
 ```
+
+CI (`.github/workflows/ci.yml`) runs the build, `ScrollwiseVerify`, `swift test`
+and the universal bundle build on macOS 26 with Xcode for every push.
 
 `ScrollwiseTapCheck` posts scroll events and consumes them before any app sees
 them, and refuses to run while Scrollwise itself is running. What each suite

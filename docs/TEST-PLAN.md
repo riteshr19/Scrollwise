@@ -12,7 +12,7 @@ Last full run: 2026-09-10, macOS 26.5.1 (25F80), Apple silicon (arm64), Swift
 | Suite | What it drives | Count | Status |
 |---|---|---|---|
 | `ScrollwiseVerify` | Core, framework-free | 140 checks | **PASSED** — native arm64, and the x86_64 build under Rosetta |
-| `ScrollwiseCoreTests` | Core, swift-testing | 63 tests in 15 suites | **BLOCKED** — needs Xcode's `Testing` module |
+| `ScrollwiseCoreTests` | Core, swift-testing | 63 tests in 15 suites | **PASSED in CI** — GitHub `macos-26`, Xcode 26.6, Swift 6.3.3 (run 34497915964). BLOCKED locally: no Xcode |
 | `ScrollwiseTapCheck` | the real event tap | 44 checks | **PASSED** (3 not run: tablet, recovery, timing) |
 | `ScrollwiseTapCheck`, instrumented | + timeout recovery, callback timing | 56 checks | **PASSED** (1 not run: tablet) |
 | `ScrollwiseTapCheck --running-app` | the built, signed, running bundle | 6 checks | **PASSED** |
