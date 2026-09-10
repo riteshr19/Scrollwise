@@ -279,16 +279,18 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            // Only advertise keys that work. When another app owns the
-            // combination, showing them would invite a press that does nothing.
+            // Only advertise keys that work. When registration fails, showing
+            // them would invite a press that does nothing. Say what is known —
+            // registration failed — and no more: a conflict with another app is
+            // one possible cause, and not one the API can confirm.
             if state.isShortcutRegistered {
                 Text("Toggle").font(.callout).foregroundStyle(.secondary)
                 KeyCapGroup(keys: ["⌥", "⌘", "R"])
             } else {
-                Text("⌥⌘R in use elsewhere")
+                Text("⌥⌘R unavailable")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                    .help("Another app already uses ⌥⌘R, so it does not toggle Scrollwise")
+                    .help("macOS did not register ⌥⌘R for Scrollwise, so it does not toggle scrolling. Another app may be using it.")
             }
 
             Spacer(minLength: 8)

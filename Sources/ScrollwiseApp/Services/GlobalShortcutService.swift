@@ -21,8 +21,10 @@ final class GlobalShortcutService {
     /// it says so instead of showing keys that do nothing.
     private(set) var isRegistered = false
 
-    private static let signature: OSType = 0x53_43_52_56  // 'SCRV'
-    private static let identifier: UInt32 = 1
+    // Shared with `hotKeyHandler` below, so the handler checks the same values
+    // this service registers rather than a copy that could drift.
+    fileprivate nonisolated static let signature: OSType = 0x53_43_52_56  // 'SCRV'
+    fileprivate nonisolated static let identifier: UInt32 = 1
 
     /// Attempts registration once. A refusal is not retried: the combination
     /// belongs to someone else until they release it, and polling for that
@@ -100,7 +102,10 @@ private let hotKeyHandler: EventHandlerUPP = { _, event, userData in
         &hotKeyID
     )
     guard status == noErr else { return status }
-    guard hotKeyID.signature == 0x53_43_52_56 else { return OSStatus(eventNotHandledErr) }
+    guard hotKeyID.signature == GlobalShortcutService.signature,
+          hotKeyID.id == GlobalShortcutService.identifier else {
+        return OSStatus(eventNotHandledErr)
+    }
 
     let service = Unmanaged<GlobalShortcutService>.fromOpaque(userData).takeUnretainedValue()
     MainActor.assumeIsolated { service.fire() }
