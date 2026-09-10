@@ -1,7 +1,14 @@
 # Scrollwise
 
 Reverses the direction of scrolling on macOS, with independent settings for
-trackpads and mice. Menu bar utility, macOS 26+.
+trackpads and mice. Menu bar utility, macOS 26+, Apple silicon and Intel.
+
+Rules act on the *kind* of device, recognised from how it scrolls: a Magic Mouse
+scrolls with trackpad gestures, so the Trackpad rule governs it.
+
+**Status: not yet distributable.** It is signed with a local certificate, not
+Developer ID, and not notarized, so Gatekeeper rejects it on any other Mac. See
+[docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-CHECKLIST.md).
 
 Built from a design canvas exploring four architectures — this implements
 option **1b** (sidebar + detail settings window) and option **1d** (menu bar
@@ -38,9 +45,13 @@ About.
 ## Build and run
 
 ```bash
-./Scripts/build-app.sh release     # → build/Scrollwise.app
+bash Scripts/build-app.sh          # → build/Scrollwise.app, universal (arm64 + x86_64)
 open build/Scrollwise.app
+bash Scripts/make-dmg.sh           # → build/Scrollwise-<version>.dmg
 ```
+
+Launch it with `open`, not by running the binary: a Terminal launch inherits
+Terminal's Accessibility grant and reports permission that the app does not have.
 
 Then grant Accessibility access: **System Settings › Privacy & Security ›
 Accessibility**. The app opens its window on first launch to explain why, and
@@ -52,25 +63,35 @@ Nothing pretends to work.
 ## Verify
 
 ```bash
-swift run ScrollwiseVerify     # 34 checks, no Xcode required
-swift test                         # full suite; needs Xcode for `Testing`
+swift run -c release ScrollwiseVerify     # 140 checks of the decision layer, no Xcode required
+swift run -c release ScrollwiseTapCheck   # 44 checks against the real event tap; needs Accessibility
+swift run -c release -Xswiftc -DSCROLLWISE_INSTRUMENT ScrollwiseTapCheck   # 56, adds recovery and timing
+swift run -c release ScrollwiseTapCheck --running-app   # 6, end to end against the running app
+swift test                                # the swift-testing suite; needs Xcode for `Testing`
 ```
+
+`ScrollwiseTapCheck` posts scroll events and consumes them before any app sees
+them, and refuses to run while Scrollwise itself is running. What each suite
+covers, and what still needs a hand on real hardware, is in
+[docs/TEST-PLAN.md](docs/TEST-PLAN.md).
 
 ## Layout
 
 ```
 Sources/ScrollwiseCore/     pure logic — no AppKit, no CoreGraphics
-  Model/                        settings, rules, deltas, device types
-  Classification/               event traits → device class
+  Model/                        settings, rules, deltas, raw event fields, permission state
+  Classification/               event traits → device class; HID devices
   Transform/                    flip decision + momentum latch
-  Settings/                     persistence and shipped defaults
+  Settings/                     lenient persistence and shipped defaults
+Sources/ScrollwiseEngine/   event tap, its thread and watchdog, the engine that owns it
 Sources/ScrollwiseApp/      the application
-  Engine/                       event tap, thread boundary, CGEvent access
   Services/                     accessibility, login item, HID, shortcut
   UI/MenuBar/                   option 1d
   UI/Settings/                  option 1b
-Sources/ScrollwiseVerify/   framework-free test runner
+Sources/ScrollwiseVerify/   framework-free checks of Core
+Sources/ScrollwiseTapCheck/ live checks against the real tap (dev tool, not shipped)
 Tests/                          swift-testing suite
+Scripts/                        universal build + signing, DMG, icon
 docs/                           architecture, audit, test plan, checklist
 ```
 

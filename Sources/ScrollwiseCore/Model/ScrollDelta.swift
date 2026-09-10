@@ -19,7 +19,16 @@ public struct AxisDelta: Equatable, Sendable {
 
     /// Returns a new value with every representation negated. Never mutates.
     public var negated: AxisDelta {
-        AxisDelta(line: -line, point: -point, fixedPoint: -fixedPoint)
+        AxisDelta(line: Self.negate(line), point: Self.negate(point), fixedPoint: -fixedPoint)
+    }
+
+    /// Integer negation that cannot trap. Plain `-` traps on `Int64.min`, and
+    /// this runs inside the event tap on values any process can post, so one
+    /// crafted event would otherwise take the app down. `Int64.min` is left as
+    /// it is — it has no positive counterpart — and every other value negates
+    /// exactly, so flipping twice is still the identity.
+    public static func negate(_ value: Int64) -> Int64 {
+        0 &- value
     }
 
     public var isZero: Bool { line == 0 && point == 0 && fixedPoint == 0 }

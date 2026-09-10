@@ -31,7 +31,7 @@ struct SettingsWindowView: View {
                 .frame(minWidth: Metrics.detailMinWidth)
         }
         .frame(minHeight: Metrics.windowMinHeight)
-        .onAppear { state.refreshDevices() }
+        .onAppear { state.refreshSystemState() }
         .onChange(of: selection) { _, new in
             if new == .devices { state.refreshDevices() }
         }

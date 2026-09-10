@@ -9,11 +9,15 @@ struct AttachedDevice: Identifiable, Equatable, Sendable {
     let type: PointingDeviceType
     let transport: String?
     let isBuiltIn: Bool
+    /// A Magic Mouse: a mouse whose scrolling the Trackpad rule governs, so it
+    /// is listed under Trackpad and says why. See
+    /// `HIDPointingDeviceClassifier.isMagicMouse`.
+    var scrollsLikeTrackpad = false
 
     /// "Bluetooth", "USB", or "Built-in" — the subtitle in the device list.
     var subtitle: String {
-        if isBuiltIn { return "Built-in" }
-        return transport ?? "Connected"
+        let connection = isBuiltIn ? "Built-in" : (transport ?? "Connected")
+        return scrollsLikeTrackpad ? "\(connection) · scrolls like a trackpad" : connection
     }
 }
 
@@ -156,13 +160,20 @@ final class HIDDeviceInventory {
             ?? string(device, kIOHIDManufacturerKey)
             ?? "Pointing Device"
         let rawTransport = string(device, kIOHIDTransportKey)
+        let isMagicMouse = HIDPointingDeviceClassifier.isMagicMouse(
+            vendorID: integer(device, kIOHIDVendorIDKey),
+            productID: integer(device, kIOHIDProductIDKey),
+            name: name
+        )
 
         return AttachedDevice(
             id: identity(device, name: name),
             name: name,
-            type: classify(device),
+            // Listed under the rule that actually governs its scrolling.
+            type: isMagicMouse ? .trackpad : classify(device),
             transport: rawTransport.map(HIDPointingDeviceClassifier.friendlyTransport),
-            isBuiltIn: rawTransport.map(HIDPointingDeviceClassifier.isInternalTransport) ?? false
+            isBuiltIn: rawTransport.map(HIDPointingDeviceClassifier.isInternalTransport) ?? false,
+            scrollsLikeTrackpad: isMagicMouse
         )
     }
 

@@ -27,10 +27,14 @@ public enum SettingsDefaults {
         ]
     }
 
+    public static var profile: Profile {
+        Profile(id: defaultProfileID, name: "Default", deviceRules: deviceRules)
+    }
+
     public static var settings: ScrollSettings {
         ScrollSettings(
             isEnabled: true,
-            profiles: [Profile(id: defaultProfileID, name: "Default", deviceRules: deviceRules)],
+            profiles: [profile],
             activeProfileID: defaultProfileID,
             appRules: [],
             launchAtLogin: false,

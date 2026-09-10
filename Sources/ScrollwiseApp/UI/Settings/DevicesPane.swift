@@ -109,7 +109,7 @@ struct DevicesPane: View {
     }
 
     private var limitationNote: some View {
-        Text("macOS does not tell an app which individual mouse produced a scroll, so a rule covers every device of its kind. Connected hardware is listed under the rule that governs it.")
+        Text("macOS does not tell an app which individual mouse produced a scroll, so a rule covers every device of its kind, recognised from how it scrolls. A Magic Mouse scrolls with the same gestures as a trackpad, so the Trackpad rule governs it. Connected hardware is listed under the rule that governs it.")
             .font(.caption)
             // A paragraph the user is meant to read. `.tertiary` measures about
             // 2.2:1 in light mode, which is fine for a chevron and not for prose.

@@ -192,7 +192,7 @@ keeping: measure the platform before concluding the platform is being missed.
 | Profile popup / segmented control | `ProfileToolbarItem`, `MenuBarView.profilePicker` | `Profile`, `activeProfileID` |
 | "Skip in this app — Figma" | `MenuBarView.appAndLoginSection` | `AppRule(.passthrough)` + `FrontmostAppMonitor` |
 | "All app rules ›" | `AppsPane` | `ScrollSettings.appRules` |
-| ⌥⌘R shortcut chips | `ShortcutsPane`, popover footer | `GlobalShortcutService` (`RegisterEventHotKey`) |
+| ⌥⌘R shortcut chips | `ShortcutsPane`, popover footer | `GlobalShortcutService` (`RegisterEventHotKey`); the keys are shown only while registered |
 | "Start at login" | `GeneralPane`, popover | `LaunchAtLoginService` (`SMAppService`) |
 | "Version 0.0.1 · Accessibility granted" | Sidebar footer | `AccessibilityService` for the permission half; the number is read from the bundle, never hard-coded |
 | Settings… / Quit | Popover footer | `SettingsWindowPresenter`, `NSApp.terminate` |
@@ -201,8 +201,16 @@ keeping: measure the platform before concluding the platform is being missed.
 
 Accessibility denied · Accessibility granted-but-tap-refused · engine
 reconnecting · device class not connected · no app rules (empty state) · login
-item unavailable · master switch off (dependent controls disabled, not merely
-dimmed) · first-run window presentation.
+item unavailable · login item waiting for approval (with a button to Login
+Items) · master switch off (dependent controls disabled, not merely dimmed) ·
+first-run window presentation · shortcut unavailable · engine on with nothing
+connected to reverse ("On", not "Reversing").
+
+The last one was a truthfulness defect found in the 2026-09-10 audit by reading
+the running popover through `AXUIElement`: it said "Reversing" above "Nothing is
+being reversed" whenever the only reversed class had no hardware attached. The
+headline now comes from `ScrollTransformer` over the attached device classes and
+the frontmost app — the same decision the tap makes.
 
 ## 6. Scope reduction, and why
 

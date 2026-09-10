@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import ScrollwiseCore
+import ScrollwiseEngine
 
 /// The single observable source of truth the whole UI reads.
 ///
@@ -16,14 +17,16 @@ final class AppState {
     private(set) var settings: ScrollSettings
     private(set) var accessibility: AccessibilityStatus = .denied
     private(set) var attachedDevices: [AttachedDevice] = []
+    /// True only once the tap has actually attached — never on the strength of
+    /// having asked for one. See `ScrollEngine.State`.
     private(set) var isEngineRunning = false
+    /// Whether ⌥⌘R belongs to Scrollwise. Surfaces show the keys only when it does.
+    private(set) var isShortcutRegistered = false
     /// Frontmost app, cached for the "Skip in this app" row.
     private(set) var frontmostApp: (bundleID: String, name: String)?
     private(set) var launchAtLoginAvailable = true
     private(set) var launchAtLoginNeedsApproval = false
     private(set) var launchAtLoginRefusal: String?
-    /// Most recent non-fatal problem, shown as a banner and cleared on recovery.
-    var lastError: ScrollwiseError?
 
     // MARK: - Collaborators
 
@@ -32,6 +35,7 @@ final class AppState {
     private let engine: ScrollEngine
     private let permissions = AccessibilityService()
     private let inventory = HIDDeviceInventory()
+    private let shortcuts = GlobalShortcutService()
     private var frontmostMonitor: FrontmostAppMonitor?
 
     init(store: SettingsStore = SettingsStore()) {
@@ -45,24 +49,17 @@ final class AppState {
     // MARK: - Lifecycle
 
     func start() {
-        engine.onFailure = { [weak self] error in
-            guard let self else { return }
-            self.lastError = error
-            self.isEngineRunning = self.engine.isRunning
-            if case .eventTapCreationFailed = error {
-                self.permissions.noteTapCreationFailed()
-                self.accessibility = self.permissions.status
-            }
+        engine.onStateChange = { [weak self] state in
+            self?.engineStateChanged(state)
         }
 
         permissions.start { [weak self] status in
             guard let self else { return }
             self.accessibility = status
             self.engine.reconcile(with: status)
-            self.isEngineRunning = self.engine.isRunning
-            if status.allowsEngine { self.lastError = nil }
         }
-        accessibility = permissions.refresh()
+        accessibility = permissions.status
+        engine.reconcile(with: accessibility)
 
         let monitor = FrontmostAppMonitor { [weak self] bundleID in
             guard let self else { return }
@@ -77,20 +74,25 @@ final class AppState {
         // login item in System Settings without telling us.
         reconcileLaunchAtLogin()
 
-        engine.reconcile(with: accessibility)
-        isEngineRunning = engine.isRunning
         refreshDevices()
-
         inventory.onChange = { [weak self] in
             guard let self else { return }
             self.attachedDevices = self.inventory.devices
             Log.devices.info("Device set changed — list refreshed")
         }
         inventory.startObserving()
+
+        shortcuts.register { [weak self] in
+            self?.toggleEnabled()
+        }
+        isShortcutRegistered = shortcuts.isRegistered
     }
 
-    /// Called from `applicationWillTerminate`. Leaves nothing running.
+    /// Called from `applicationWillTerminate`. Leaves nothing running: the
+    /// engine's stop waits for the tap thread to exit.
     func shutDown() {
+        shortcuts.unregister()
+        isShortcutRegistered = false
         engine.stop()
         permissions.stop()
         inventory.stopObserving()
@@ -98,6 +100,18 @@ final class AppState {
         frontmostMonitor = nil
         isEngineRunning = false
         Log.lifecycle.info("Application shut down cleanly")
+    }
+
+    /// The engine's own account of whether a tap is attached is what the UI
+    /// shows, and what tells the permission model a grant is not working.
+    private func engineStateChanged(_ state: ScrollEngine.State) {
+        isEngineRunning = state == .running
+        switch state {
+        case .running: permissions.noteTapInstalled()
+        case .failed: permissions.noteTapCreationFailed()
+        case .stopped, .starting: break
+        }
+        accessibility = permissions.status
     }
 
     // MARK: - Mutations (all immutable updates, then one persist + one push)
@@ -167,18 +181,31 @@ final class AppState {
     }
 
     /// Asks the system first and records only what it actually achieved, so the
-    /// switch can never show a state the system disagrees with.
+    /// switch can never show a state the system disagrees with. A refusal is
+    /// reported through `launchAtLoginRefusal`, which the General pane shows.
     func setLaunchAtLogin(_ enabled: Bool) {
         switch LaunchAtLoginService.setEnabled(enabled) {
         case .success(let achieved):
             var updated = settings
             updated.launchAtLogin = achieved
             commit(updated)
-        case .failure(let error):
-            lastError = error
+        case .failure:
             reconcileLaunchAtLogin()
         }
         refreshLaunchAtLogin()
+    }
+
+    func openLoginItemsSettings() {
+        LaunchAtLoginService.openSystemSettings()
+    }
+
+    /// Re-reads what the system can change behind the app's back — hardware,
+    /// and a login item approved or revoked in System Settings. Called when a
+    /// surface appears; cheap, and never on a timer.
+    func refreshSystemState() {
+        refreshDevices()
+        refreshLaunchAtLogin()
+        reconcileLaunchAtLogin()
     }
 
     /// Mirrors what the system reports about the login item. Availability is
@@ -197,9 +224,10 @@ final class AppState {
         commit(updated)
     }
 
-    /// The one place settings are written. Persist, then hand the engine an
-    /// immutable snapshot — in that order, so a crash cannot lose a change the
-    /// engine already acted on.
+    /// The one place settings are written. The engine receives the complete new
+    /// value in one swap, so it can never act on half of a change. Persistence
+    /// failing is logged by the store and does not stop the engine or the UI —
+    /// both show the value the engine is actually using.
     private func commit(_ updated: ScrollSettings) {
         guard updated != settings else { return }
         settings = updated
@@ -257,6 +285,21 @@ final class AppState {
     /// the engine is attached, and the master switch is on.
     var isActive: Bool {
         accessibility.allowsEngine && isEngineRunning && settings.isEnabled
+    }
+
+    /// Whether anything connected is actually being changed right now: some
+    /// attached kind of device whose scrolling the rules flip, in the app that is
+    /// frontmost. "Reversing" is claimed only then. `isActive` alone read
+    /// "Reversing" above "Nothing is being reversed" whenever the one reversed
+    /// class had no hardware attached. The decision is the engine's own
+    /// `ScrollTransformer`, so the headline cannot disagree with the tap.
+    var isReversingSomething: Bool {
+        guard isActive else { return false }
+        let frontmost = frontmostApp?.bundleID
+        return PointingDeviceType.allCases.contains { type in
+            type != .unknown && !devices(ofType: type).isEmpty
+                && !ScrollTransformer.flip(device: type, frontmostBundleID: frontmost, settings: settings).isIdentity
+        }
     }
 
     var activeDeviceCount: Int {

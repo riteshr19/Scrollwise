@@ -83,15 +83,19 @@ struct ShortcutsPane: View {
             SettingsCard {
                 SettingsRow(
                     title: "Toggle from anywhere",
-                    subtitle: "Flips the master switch without opening the app",
-                    systemImage: "command"
+                    subtitle: state.isShortcutRegistered
+                        ? "Flips the master switch without opening the app"
+                        : "Unavailable — another app already uses this combination",
+                    systemImage: "command",
+                    isDimmed: !state.isShortcutRegistered
                 ) {
                     KeyCapGroup(keys: ["⌥", "⌘", "R"])
                 }
             }
             Text("The shortcut is fixed in this version. It is registered with the system only while Scrollwise is running.")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                // Prose the user is meant to read: `.secondary`, not `.tertiary`.
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -115,6 +119,13 @@ struct GeneralPane: View {
                     .toggleStyle(.switch)
                     .labelsHidden()
                     .disabled(!state.launchAtLoginAvailable)
+                }
+                if state.launchAtLoginNeedsApproval {
+                    RowDivider()
+                    SettingsRow(title: "Approve in System Settings") {
+                        Button("Open Login Items…") { state.openLoginItemsSettings() }
+                            .controlSize(.small)
+                    }
                 }
             }
 
