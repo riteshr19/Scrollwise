@@ -1,6 +1,6 @@
 # Scrollwise
 
-[![CI](https://github.com/riteshr19/Scrollwise/actions/workflows/ci.yml/badge.svg)](https://github.com/riteshr19/Scrollwise/actions/workflows/ci.yml)
+[![CI](https://github.com/ambicuity/Scrollwise/actions/workflows/ci.yml/badge.svg)](https://github.com/ambicuity/Scrollwise/actions/workflows/ci.yml)
 
 Reverses the direction of scrolling on macOS, with independent settings for
 trackpads and mice. Menu bar utility, macOS 26+, Apple silicon and Intel.
@@ -53,7 +53,7 @@ with the project's own certificate instead, so macOS asks you to confirm it once
 for each download.
 
 1. Download `Scrollwise-<version>.dmg` from
-   [Releases](https://github.com/riteshr19/Scrollwise/releases).
+   [Releases](https://github.com/ambicuity/Scrollwise/releases).
 2. Optionally, check it against the SHA-256 published with the release:
    `shasum -a 256 ~/Downloads/Scrollwise-<version>.dmg`
 3. Open the disk image and drag **Scrollwise** into **Applications**.
