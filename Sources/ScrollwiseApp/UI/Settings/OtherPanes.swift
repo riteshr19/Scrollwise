@@ -171,8 +171,8 @@ struct GeneralPane: View {
 /// events, and has no third-party dependencies.
 struct AboutPane: View {
 
-    private static let repository = URL(string: "https://github.com/riteshr19/Scrollwise")!
-    private static let licence = URL(string: "https://github.com/riteshr19/Scrollwise/blob/main/LICENSE")!
+    private static let repository = URL(string: "https://github.com/ambicuity/Scrollwise")!
+    private static let licence = URL(string: "https://github.com/ambicuity/Scrollwise/blob/main/LICENSE")!
     private static let email = URL(string: "mailto:contact@riteshrana.engineer")!
 
     var body: some View {
@@ -231,7 +231,7 @@ struct AboutPane: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionCaption(text: "Source")
             SettingsCard {
-                SettingsRow(title: "Repository", subtitle: "github.com/riteshr19/Scrollwise") {
+                SettingsRow(title: "Repository", subtitle: "github.com/ambicuity/Scrollwise") {
                     Link(destination: Self.repository) {
                         Label("Open", systemImage: "arrow.up.right.square")
                     }
